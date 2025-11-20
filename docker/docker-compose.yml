@@ -1,0 +1,59 @@
+x-constants:
+  backend_host: &backend_host localhost
+  backend_port: &backend_port 5000
+
+services:
+  db:
+      image: mysql:latest
+      container_name: geocontrol-db
+      restart: unless-stopped
+      ports:
+        - "3306:3306"
+      volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      environment:
+        MYSQL_ROOT_PASSWORD: rootpassword
+        MYSQL_DATABASE: geocontrol_db
+        MYSQL_USER: geocontrol_user
+        MYSQL_PASSWORD: secret
+      healthcheck:
+        test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+        interval: 5s
+        timeout: 10s
+        retries: 10
+
+  frontend:
+    image: smpolito/geocontrolui:latest
+    container_name: geocontrol-frontend
+    ports:
+      - "5173:5173" # Anchored variables defined above (e.g., &frontend_port) cannot be used within quoted strings.
+        # Values like port numbers must be written explicitly as literals, but they should remain consistent with the defined variables.
+    volumes: # Environment variables for the front-end must be defined in the frontend/env.vars.json and the file must be
+      - ./frontend/env-vars.json:/app/dist/config.json # explicitly mounted in the container to be effective
+
+  backend:
+    build:
+      context: ../
+      dockerfile: ./docker/backend/Dockerfile
+    container_name: geocontrol-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: geocontrol_user
+      DB_PASSWORD: secret
+      DB_NAME: geocontrol_db
+
+  adminer:
+    image: adminer:latest
+    container_name: geocontrol-adminer
+    ports:
+      - "8080:8080"
+
+volumes:
+  db_data:
